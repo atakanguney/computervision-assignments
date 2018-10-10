@@ -1,4 +1,4 @@
-import collections
+from collections import Counter
 import numpy as np
 import cv2 as cv
 from matplotlib import pyplot as plt
@@ -21,10 +21,13 @@ plt.subplot2grid(layout, (0, 1), colspan=1)
 plt.imshow(bgr2rgb(img)), plt.title("ORIGINAL")
 plt.subplot2grid(layout, (1, 0))
 plt.imshow(blue), plt.title("BLUE")
+plt.colorbar()
 plt.subplot2grid(layout, (1, 1))
 plt.imshow(green), plt.title("GREEN")
+plt.colorbar()
 plt.subplot2grid(layout, (1, 2))
 plt.imshow(red), plt.title("RED")
+plt.colorbar()
 plt.show()
 
 # Convert BGR image into HSV color space
@@ -43,13 +46,17 @@ h = normalize(h, 0, 179, 0, 255)
 
 layout = (2, 3)
 plt.subplot2grid(layout, (0, 1), colspan=1)
-plt.imshow(bgr2rgb(img)), plt.title("ORIGINAL")
+#plt.imshow(bgr2rgb(img)), plt.title("ORIGINAL")
+plt.imshow(hsv_img), plt.title("HSV")
 plt.subplot2grid(layout, (1, 0))
 plt.imshow(h), plt.title("HUE")
+plt.colorbar()
 plt.subplot2grid(layout, (1, 1))
 plt.imshow(s), plt.title("SATURATION")
+plt.colorbar()
 plt.subplot2grid(layout, (1, 2))
 plt.imshow(v), plt.title("VALUE")
+plt.colorbar()
 plt.show()
 
 
@@ -78,13 +85,9 @@ def bin_numbers(seq, bins):
 
 # Histogram function
 def histogram(seq, n_bins=256, range=(0, 256)):
-    temp_seq = seq.copy()
-    temp_seq = temp_seq[(temp_seq < range[1]) & (temp_seq >= range[0])]
     bins = np.linspace(range[0], range[1], n_bins + 1)
-    bin_indices = np.concatenate((
-        bins.searchsorted(temp_seq[:-1], side='left'),
-        bins.searchsorted(temp_seq[-1:], side='right')
-    ))
+
+    bin_indices = np.searchsorted(bins, seq, side='left')
     hist = np.bincount(bin_indices, minlength=n_bins)
 
     # Return x axis values and height values to plot bar
@@ -102,11 +105,35 @@ images = {
 
 for title in images:
     hist_m, bins_m = histogram(images[title].ravel(), 256, [0, 256])
-    plt.subplot("121")
-    plt.title(title + ' mine')
+    plt.subplot("221")
+    plt.title(title + " mine")
     plt.bar(bins_m[:-1], height=hist_m)
-    plt.subplot("122")
+    plt.subplot("222")
     hist, bins = np.histogram(images[title].ravel(), 256, [0, 256])
+    assert np.equal(hist, hist_m).all(), "My histogram function is not equal to numpy histogram"
     plt.bar(bins[:-1], height=hist)
     plt.title(title)
+
+    plt.subplot("223")
+    plt.title("BINCOUNT")
+    hist_b = np.bincount(images[title].flatten(), minlength=256)
+    assert np.equal(hist, hist_b).all(), "My histogram function is not equal to bincount"
+    plt.bar(range(0, 256), height=hist_b)
+    plt.subplot("224")
+    plt.title("COUNTER")
+
+    def counter(seq):
+        z = Counter(seq.tolist())
+        hist = np.zeros(256)
+        for el in z:
+            hist[el] = z[el]
+
+        bins = np.arange(0, 256)
+
+        return hist, bins
+
+    hist_c, bins_c = counter(images[title].ravel())
+    assert np.equal(hist, hist_c).all(), "My histogram function is not equal to counter"
+    plt.bar(bins_c, height=hist_c)
     plt.show()
+

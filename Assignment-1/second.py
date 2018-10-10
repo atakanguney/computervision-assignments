@@ -25,70 +25,36 @@ for mask in masks:
     _, temp_ = cv.threshold(mask, 0, 255, cv.THRESH_BINARY)
     binary_masks.append(temp_)
 
-# for mask in masks:
-#    plt.imshow(mask, cmap='gray')
-#    plt.show()
 
-# rows = []
-# cols = []
+def obtain_range(img, binary_mask):
+    # Split image into B, G, R
+    blue, green, red = cv.split(img)
+    # Convert mask image into HSV space
+    hsv_img = cv.cvtColor(img, cv.COLOR_BGR2HSV)
+    # Get values of each channel
+    hue, saturation, value = cv.split(hsv_img)
+    # Apply Mask
+    red &= binary_mask
+    green &= binary_mask
+    blue &= binary_mask
 
-# for bin_mask in binary_masks:
-#    row, col = np.where(bin_mask > 0)
-#    rows.append(row)
-#    cols.append(col)
+    hue &= binary_mask
+    saturation &= binary_mask
+    value &= binary_mask
 
-
-def obtain_ranges(imgs, binary_masks):
-    # Create arrays for each channel
-    reds = []
-    greens = []
-    blues = []
-
-    hues = []
-    saturations = []
-    values = []
-
-    for i, img in enumerate(imgs):
-        # Split image into B, G, R
-        blue, green, red = cv.split(img)
-        # Convert mask image into HSV space
-        hsv_img = cv.cvtColor(img, cv.COLOR_BGR2HSV)
-        # Get values of each channel
-        hue, saturation, value = cv.split(hsv_img)
-        # Apply Masks
-        red &= binary_masks[i]
-        green &= binary_masks[i]
-        blue &= binary_masks[i]
-
-        hue &= binary_masks[i]
-        saturation &= binary_masks[i]
-        value &= binary_masks[i]
-
-        # Store values for each channel to corresponding arrays
-        reds.append(red[red > 0].flatten())
-        blues.append(blue[blue > 0].flatten())
-        greens.append(green[green > 0].flatten())
-
-        hues.append(hue[hue > 0].flatten())
-        saturations.append(saturation[saturation > 0].flatten())
-        values.append(value[value > 0 ].flatten())
-
-
-    # Obtain ranges for each channel
-    def reduce2range(seq):
-        min_ = reduce(lambda x, y: min(np.min(x), np.min(y)), seq)
-        max_ = reduce(lambda x, y: max(np.max(x), np.max(y)), seq)
-
+    # Obtain range for each channel
+    def reduce2range(channel):
+        min_ = np.min(channel)
+        max_ = np.max(channel)
         return min_, max_
 
+    r_range = reduce2range(red[red > 0].flatten())
+    g_range = reduce2range(green[green > 0].flatten())
+    b_range = reduce2range(blue[blue > 0].flatten())
 
-    r_range = reduce2range(reds)
-    g_range = reduce2range(greens)
-    b_range = reduce2range(blues)
-
-    h_range = reduce2range(hues)
-    s_range = reduce2range(saturations)
-    v_range = reduce2range(values)
+    h_range = reduce2range(hue[hue > 0].flatten())
+    s_range = reduce2range(saturation[saturation > 0].flatten())
+    v_range = reduce2range(value[value > 0].flatten())
 
     bgr_lower = np.array([b_range[0], g_range[0], r_range[0]])
     bgr_upper = np.array([b_range[1], g_range[1], r_range[1]])
@@ -100,14 +66,17 @@ def obtain_ranges(imgs, binary_masks):
 
 
 def predict_skin_color_masks(imgs, binary_masks):
-    bgr_lower , bgr_upper, hsv_lower, hsv_upper = obtain_ranges(imgs, binary_masks)
-    predicted_masks_BGR = [cv.inRange(img, bgr_lower, bgr_upper) for img in imgs]
-    predicted_masks_HSV = [cv.inRange(cv.cvtColor(img, cv.COLOR_BGR2HSV), hsv_lower, bgr_upper) for img in imgs]
+    predicted_masks_combined = []
+    for i, img in enumerate(imgs):
+        bgr_lower, bgr_upper, hsv_lower, hsv_upper = obtain_range(img, binary_masks[i])
+        predicted_mask_BGR = cv.inRange(img, bgr_lower, bgr_upper)
+        predicted_mask_HSV = cv.inRange(cv.cvtColor(img, cv.COLOR_BGR2HSV), hsv_lower, bgr_upper)
 
-    predicted_masks_combined = [cv.bitwise_and(predicted_masks_BGR[i], predicted_masks_HSV[i]) for i in
-                                range(len(predicted_masks_BGR))]
+        predicted_mask_combined = cv.bitwise_and(predicted_mask_BGR, predicted_mask_HSV)
+        predicted_masks_combined.append(predicted_mask_combined)
 
     return predicted_masks_combined
+
 
 predictions = predict_skin_color_masks(imgs, binary_masks)
 for i, pred in enumerate(predictions):
@@ -116,7 +85,6 @@ for i, pred in enumerate(predictions):
     plt.show()
 
 # Erosion
-
 masks_erosion = []
 kernel = np.ones((5, 5), np.uint8)
 for mask in binary_masks:

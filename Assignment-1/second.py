@@ -69,8 +69,11 @@ def predict_skin_color_masks(imgs, binary_masks):
     predicted_masks_combined = []
     for i, img in enumerate(imgs):
         bgr_lower, bgr_upper, hsv_lower, hsv_upper = obtain_range(img, binary_masks[i])
+        print(bgr_lower)
+        print(bgr_upper)
+        print(hsv_lower)
         predicted_mask_BGR = cv.inRange(img, bgr_lower, bgr_upper)
-        predicted_mask_HSV = cv.inRange(cv.cvtColor(img, cv.COLOR_BGR2HSV), hsv_lower, bgr_upper)
+        predicted_mask_HSV = cv.inRange(cv.cvtColor(img, cv.COLOR_BGR2HSV)[:, :, :-1], hsv_lower[:-1], hsv_upper[:-1])
 
         predicted_mask_combined = cv.bitwise_and(predicted_mask_BGR, predicted_mask_HSV)
         predicted_masks_combined.append(predicted_mask_combined)

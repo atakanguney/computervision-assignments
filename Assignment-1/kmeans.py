@@ -3,7 +3,7 @@ import numpy as np
 
 class KMeans:
 
-    def __init__(self, n_clusters, max_iter=50):
+    def __init__(self, n_clusters, max_iter=100):
         self.n_clusters = n_clusters
         self.max_iter = max_iter
         self.centroids = None
@@ -37,8 +37,8 @@ class KMeans:
             self.update_centroids(data, labels)
             labels = self.labels(data)
 
-        # Return trained model
-        return self
+        # Return fitted centroids
+        return self.centroids
 
     def should_stop(self, old_centroids, iter_):
         # Check centroids and old centroids values are assigned
@@ -69,4 +69,7 @@ def calculate_dists(X, M):
     # same element would be used, and that does not
     # affect the result of np.argmin(distance_matrix, axis=1)
     # function
-    return -2 * X.dot(M.T) + (M*M).sum(axis=1)[np.newaxis, :]
+    if not (X.dtype is np.float64):
+        X = X.astype(np.float64)
+
+    return (X*X).sum(axis=1)[:, np.newaxis] - 2 * X.dot(M.T) + (M*M).sum(axis=1)[np.newaxis, :]

@@ -28,6 +28,7 @@ plt.colorbar()
 plt.subplot2grid(layout, (1, 2))
 plt.imshow(red), plt.title("RED")
 plt.colorbar()
+plt.savefig("Task 1 Plots/RGB_plots.png")
 plt.show()
 
 # Convert BGR image into HSV color space
@@ -57,6 +58,7 @@ plt.colorbar()
 plt.subplot2grid(layout, (1, 2))
 plt.imshow(v), plt.title("VALUE")
 plt.colorbar()
+plt.savefig("Task 1 Plots/HSV_plots.png")
 plt.show()
 
 
@@ -105,22 +107,24 @@ images = {
 
 for title in images:
     hist_m, bins_m = histogram(images[title].ravel(), 256, [0, 256])
-    plt.subplot("221")
-    plt.title(title + " mine")
+    # plt.subplot("221")
+    plt.title(title) # + " mine")
     plt.bar(bins_m[:-1], height=hist_m)
-    plt.subplot("222")
+    plt.savefig("Task 1 Plots/histogram_{}".format(title))
+    plt.show()
+    # plt.subplot("222")
     hist, bins = np.histogram(images[title].ravel(), 256, [0, 256])
     assert np.equal(hist, hist_m).all(), "My histogram function is not equal to numpy histogram"
-    plt.bar(bins[:-1], height=hist)
-    plt.title(title)
+    # plt.bar(bins[:-1], height=hist)
+    # plt.title(title)
 
-    plt.subplot("223")
-    plt.title("BINCOUNT")
+    # plt.subplot("223")
+    # plt.title("BINCOUNT")
     hist_b = np.bincount(images[title].flatten(), minlength=256)
     assert np.equal(hist, hist_b).all(), "My histogram function is not equal to bincount"
-    plt.bar(range(0, 256), height=hist_b)
-    plt.subplot("224")
-    plt.title("COUNTER")
+    # plt.bar(range(0, 256), height=hist_b)
+    # plt.subplot("224")
+    # plt.title("COUNTER")
 
     def counter(seq):
         z = Counter(seq.tolist())
@@ -134,6 +138,6 @@ for title in images:
 
     hist_c, bins_c = counter(images[title].ravel())
     assert np.equal(hist, hist_c).all(), "My histogram function is not equal to counter"
-    plt.bar(bins_c, height=hist_c)
-    plt.show()
+    # plt.bar(bins_c, height=hist_c)
+    # plt.show()
 

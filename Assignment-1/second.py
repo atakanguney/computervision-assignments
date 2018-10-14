@@ -1,29 +1,6 @@
-from functools import reduce
-
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
-
-n_imgs = 10
-imgs = []
-masks = []
-
-# Masks and Images base paths
-masks_base = "data/Images/Ground Truths/"
-imgs_base = "data/Images/Original Images/"
-
-# Read and store images and corresponding masks
-for i in range(1, n_imgs + 1):
-    img = cv.imread(imgs_base + "img_" + "{0:03d}".format(i) + ".jpg", 1)
-    mask = cv.imread(masks_base + "mask_" + "{0:03d}".format(i) + ".jpg", 0)
-
-    imgs.append(img)
-    masks.append(mask)
-
-binary_masks = []
-for mask in masks:
-    _, temp_ = cv.threshold(mask, 0, 255, cv.THRESH_BINARY)
-    binary_masks.append(temp_)
 
 
 def obtain_range(img, binary_mask):
@@ -65,48 +42,78 @@ def obtain_range(img, binary_mask):
     return bgr_lower, bgr_upper, hsv_lower, hsv_upper
 
 
+def predict_skin_color_mask(img, binary_mask):
+    bgr_lower, bgr_upper, hsv_lower, hsv_upper = obtain_range(img, binary_mask)
+    predicted_mask_BGR = cv.inRange(img, bgr_lower, bgr_upper)
+    predicted_mask_HSV = cv.inRange(cv.cvtColor(img, cv.COLOR_BGR2HSV)[:, :, :-1], hsv_lower[:-1], hsv_upper[:-1])
+
+    predicted_mask_combined = cv.bitwise_and(predicted_mask_BGR, predicted_mask_HSV)
+
+    return predicted_mask_combined
+
+
 def predict_skin_color_masks(imgs, binary_masks):
     predicted_masks_combined = []
     for i, img in enumerate(imgs):
-        bgr_lower, bgr_upper, hsv_lower, hsv_upper = obtain_range(img, binary_masks[i])
-        print(bgr_lower)
-        print(bgr_upper)
-        print(hsv_lower)
-        predicted_mask_BGR = cv.inRange(img, bgr_lower, bgr_upper)
-        predicted_mask_HSV = cv.inRange(cv.cvtColor(img, cv.COLOR_BGR2HSV)[:, :, :-1], hsv_lower[:-1], hsv_upper[:-1])
-
-        predicted_mask_combined = cv.bitwise_and(predicted_mask_BGR, predicted_mask_HSV)
+        predicted_mask_combined = predict_skin_color_mask(img, binary_masks[i])
         predicted_masks_combined.append(predicted_mask_combined)
 
     return predicted_masks_combined
 
 
-predictions = predict_skin_color_masks(imgs, binary_masks)
-for i, pred in enumerate(predictions):
-    plt.imshow(pred, cmap='gray')
-    plt.title("Image {}".format(i + 1))
-    plt.show()
+if __name__ == "__main__":
+    n_imgs = 10
+    imgs = []
+    masks = []
 
-# Erosion
-masks_erosion = []
-kernel = np.ones((5, 5), np.uint8)
-for mask in binary_masks:
-    new_mask = cv.erode(mask, kernel, iterations=1)
-    masks_erosion.append(new_mask)
-    plt.subplot("121")
-    plt.imshow(new_mask, cmap='gray')
-    plt.title("Erosion")
-    plt.subplot("122")
-    plt.imshow(mask, cmap='gray')
-    plt.title("Original")
-    plt.show()
+    # Masks and Images base paths
+    masks_base = "data/Images/Ground Truths/"
+    imgs_base = "data/Images/Original Images/"
 
-predictions_erosion = predict_skin_color_masks(imgs, masks_erosion)
-for i, pred in enumerate(predictions_erosion):
-    plt.subplot("121")
-    plt.imshow(pred, cmap='gray')
-    plt.title("with Erosion")
-    plt.subplot("122")
-    plt.imshow(predictions[i], cmap='gray')
-    plt.title("w/o Erosion")
-    plt.show()
+    # Read and store images and corresponding masks
+    for i in range(1, n_imgs + 1):
+        img = cv.imread(imgs_base + "img_" + "{0:03d}".format(i) + ".jpg", 1)
+        mask = cv.imread(masks_base + "mask_" + "{0:03d}".format(i) + ".jpg", 0)
+
+        imgs.append(img)
+        masks.append(mask)
+
+    binary_masks = []
+    for i, mask in enumerate(masks):
+        _, temp_ = cv.threshold(mask, 0, 255, cv.THRESH_BINARY)
+        plt.imshow(temp_, cmap='gray')
+        plt.savefig("Task 2 Plots/bin_mask_{0:03d}".format(i + 1))
+        plt.show()
+        binary_masks.append(temp_)
+
+    predictions = predict_skin_color_masks(imgs, binary_masks)
+    for i, pred in enumerate(predictions):
+        plt.imshow(pred)
+        plt.savefig("Task 2 Plots/skin_color_mask_{0:03d}".format(i + 1))
+        plt.show()
+
+    # Erosion
+    masks_erosion = []
+    kernel = np.ones((5, 5), np.uint8)
+    for i, mask in enumerate(binary_masks):
+        new_mask = cv.erode(mask, kernel, iterations=1)
+        masks_erosion.append(new_mask)
+        plt.subplot("121")
+        plt.imshow(new_mask, cmap='gray')
+        plt.title("with Erosion")
+        plt.subplot("122")
+        plt.imshow(mask, cmap='gray')
+        plt.title("Original")
+        plt.savefig("Task 2 Plots/bin_mask_erode_{0:03d}".format(i + 1))
+        plt.show()
+
+    predictions_erosion = predict_skin_color_masks(imgs, masks_erosion)
+    for i, pred in enumerate(predictions_erosion):
+        plt.subplot("121")
+        plt.imshow(pred)
+        plt.title("with Erosion")
+        plt.subplot("122")
+        plt.imshow(predictions[i])
+        plt.title("w/o Erosion")
+        plt.savefig("Task 2 Plots/skin_color_mask_erode_{0:03d}".format(i + 1))
+        plt.show()

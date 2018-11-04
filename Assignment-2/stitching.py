@@ -39,7 +39,6 @@ def computeH(im1Points, im2Points):
     if not isinstance(im2Points, np.ndarray):
         im2Points = np.array(im2Points).T
 
-
     # Normalization transform matrix
     def normalization_transform(img):
         mu1 = img["mu1"]
@@ -143,23 +142,10 @@ def warp(image, H):
     h, w, _ = image.shape
     y = np.arange(0, h)
     x = np.arange(0, w)
-    mesh = np.meshgrid(x, y, indexing="ij")
 
     interpolation_fun = RegularGridInterpolator((y, x), image, method="nearest")
 
     Hinv = np.linalg.pinv(H)
-
-    # X = np.stack([
-    #    mesh[0].flatten(),
-    #    mesh[1].flatten(),
-    #    np.ones(h * w)
-    # ]).astype(np.int)
-
-    # Xp = np.matmul(H, X)
-    # Xp = Xp / (Xp[2,:][np.newaxis, :])
-
-    # min_ = np.ceil(Xp.min(axis=1))
-    # max_ = np.floor(Xp.max(axis=1))
 
     c = np.array([
         [0, 0, w - 1, w - 1],
@@ -173,11 +159,11 @@ def warp(image, H):
     min_ = np.floor(cp.min(axis=1)).astype(np.int)
     max_ = np.ceil(cp.max(axis=1)).astype(np.int)
 
-    xmin = min(0, min_[0])
-    ymin = min(0, min_[1])
+    xmin = min_[0]
+    ymin = min_[1]
 
-    xmax = max(max_[0], image.shape[1])
-    ymax = max(max_[1], image.shape[0])
+    xmax = max_[0]
+    ymax = max_[1]
 
     yp = np.arange(ymin, ymax)
     xp = np.arange(xmin, xmax)
@@ -196,7 +182,7 @@ def warp(image, H):
 
     X = np.matmul(Hinv, Xp)
     X = X / (X[2, :][np.newaxis, :])
-    X = X.astype(np.int)
+    X = np.floor(X).astype(np.int)
     y_check = (-1 < X[1, :]) & (X[1, :] < h)
     x_check = (-1 < X[0, :]) & (X[0, :] < w)
 
@@ -205,7 +191,7 @@ def warp(image, H):
     check = y_check & x_check
     new_image[Xp[1, check], Xp[0, check]] = interpolation_fun(np.stack((X[1, check], X[0, check]), axis=1))
 
-    return new_image, xmin, xmax, ymin, ymax
+    return new_image, min_[0], max_[0], min_[1], max_[1]
 
 
 n_interest_points = 15
@@ -219,53 +205,74 @@ right2 = plt.imread("cmpe-building/right-2.jpg")
 imgs = {
     "left2": left2,
     "left1": left1,
-#    "mid": mid,
-#    "right1": right1,
-#    "right2": right2
+    "mid": mid,
+    "right1": right1,
+    "right2": right2
 }
 
 img_names = list(imgs.keys())
 
 img_pairs = list(zip(img_names[:-1], img_names[1:]))
 
-# warpeds = []
-# for img1, img2 in img_pairs:
-#     im_pair = {
-#         img1: imgs[img1],
-#         img2: imgs[img2]
-#     }
-#
-#     int_points = interest_points(im_pair)
-#     #for p in int_points:
-#     #    int_points[p] = list(map(lambda x: (x[1], x[0]), int_points[p]))
-#
-#     H = computeH(np.transpose(int_points[img1]), np.transpose(int_points[img2]))
-#
-#     warped = warp(imgs[img1], H)
-#     warped = warped.astype(np.uint8)
-#     warpeds.append(warped)
-#     plt.imshow(warped)
-#     plt.show()
-
+imgs = {
+    "left1": left1,
+    "mid": mid
+}
 int_points = interest_points(imgs)
-H = computeH(int_points["left2"], int_points["left1"])
-warped, xmin, xmax, ymin, ymax = warp(imgs["left2"], H)
+H1 = computeH(int_points["left1"], int_points["mid"])
+warped1, xmin1, xmax1, ymin1, ymax1 = warp(imgs["left1"], H1)
+
+imgs = {
+    "left2": left2,
+    "mid": mid
+}
+int_points = interest_points(imgs)
+H2 = computeH(int_points["left2"], int_points["mid"])
+warped2, xmin2, xmax2, ymin2, ymax2 = warp(imgs["left2"], H2)
+
+imgs = {
+    "right1": right1,
+    "mid": mid
+}
+int_points = interest_points(imgs)
+H3 = computeH(int_points["right1"], int_points["mid"])
+warped3, xmin3, xmax3, ymin3, ymax3 = warp(imgs["right1"], H3)
+
+imgs = {
+    "right2": right2,
+    "mid": mid
+}
+int_points = interest_points(imgs)
+H4 = computeH(int_points["right2"], int_points["mid"])
+warped4, xmin4, xmax4, ymin4, ymax4 = warp(imgs["right2"], H4)
+
+xmin = np.min([xmin1, xmin2, 0, xmin3, xmin4])
+xmax = np.max([xmax1, xmax2, imgs["mid"].shape[1], xmax3, xmax4])
+
+ymin = np.min([ymin1, ymin2, 0, ymin3, ymin4])
+ymax = np.max([ymax1, ymax2, imgs["mid"].shape[0], ymax3, ymax4])
 
 xsize = xmax - xmin
 ysize = ymax - ymin
+
 merged = np.zeros([ysize, xsize, 3])
-merged = warped
 
-x_size = imgs["left1"].shape[1]
-y_size = imgs["left1"].shape[0]
-merged[-ymin:y_size-ymin, -xmin:] = imgs["left1"]
+merged[ymin2 - ymin: ymin2 - ymin + warped2.shape[0], :warped2.shape[1]] = warped2
+
+mask1 = warped1.sum(axis=2).nonzero()
+merged[ymin1 - ymin: ymin1 - ymin + warped1.shape[0], xmin1 - xmin: xmin1 - xmin + warped1.shape[1]][mask1] = warped1[mask1]
+
+mask4 = warped4.sum(axis=2).nonzero()
+merged[ymin4 - ymin: ymin4 - ymin + warped4.shape[0], xmin4 - xmin: xmin4 - xmin + warped4.shape[1]][mask4] = warped4[mask4]
+
+mask3 = warped3.sum(axis=2).nonzero()
+merged[ymin3 - ymin: ymin3 - ymin + warped3.shape[0], xmin3 - xmin: xmin3 - xmin + warped3.shape[1]][mask3] = warped3[mask3]
+
+merged[-ymin: -ymin + imgs["mid"].shape[0], -xmin: -xmin + imgs["mid"].shape[1]] = np.maximum(
+    merged[-ymin: -ymin + imgs["mid"].shape[0], -xmin: -xmin + imgs["mid"].shape[1]],
+    imgs["mid"]
+)
+
 merged = merged.astype(np.uint8)
-
 plt.imshow(merged)
 plt.show()
-#h, w, _ = imgs["left2"].shape
-#big_pic = np.zeros([h, int(w * 1.5), 3], dtype=np.uint8)
-#big_pic[:, :int(w * 0.5)] = warpeds[0][:, :int(w * 0.5)]
-#big_pic[:, int(w * 0.5):] = warpeds[1]
-#plt.imshow(big_pic)
-#plt.show()

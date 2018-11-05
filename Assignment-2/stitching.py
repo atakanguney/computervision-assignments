@@ -328,28 +328,28 @@ if __name__ == "__main__":
         plt.show()
 
 
-    # exp_name = "5-correspondence"
-    # exp_results(exp_name, imgs, ref_img, n_interest_points=5)
-    # exp_name = "12-correspondence"
-    # exp_results(exp_name, imgs, ref_img, n_interest_points=12)
-    # exp_name = "12-3-wrong-unnormalized"
-    # exp_results(exp_name, imgs, ref_img, n_interest_points=12)
-    # exp_name = "12-3-wrong-normalized"
-    # exp_results(exp_name, imgs, ref_img, n_interest_points=12)
-    # exp_name = "12-5-wrong-normalized"
-    # exp_results(exp_name, imgs, ref_img, n_interest_points=12)
-    #
-    # variances = [1, 5, 10]
-    #
-    # for var in variances:
-    #     exp_name = "gaussian-noise-{}".format(var)
-    #     exp_results(exp_name, imgs, ref_img, n_interest_points=12, variance=var, noise=True)
-    #
-    # variances = [1, 5]
-    #
-    # for var in variances:
-    #     exp_name = "gaussian-noise-unnormalized-{}".format(var)
-    #     exp_results(exp_name, imgs, ref_img, normalized=False, n_interest_points=12, variance=var, noise=True)
+    exp_name = "5-correspondence"
+    exp_results(exp_name, imgs, ref_img, n_interest_points=5)
+    exp_name = "12-correspondence"
+    exp_results(exp_name, imgs, ref_img, n_interest_points=12)
+    exp_name = "12-3-wrong-unnormalized"
+    exp_results(exp_name, imgs, ref_img, n_interest_points=12)
+    exp_name = "12-3-wrong-normalized"
+    exp_results(exp_name, imgs, ref_img, n_interest_points=12)
+    exp_name = "12-5-wrong-normalized"
+    exp_results(exp_name, imgs, ref_img, n_interest_points=12)
+
+    variances = [1, 5, 10]
+
+    for var in variances:
+        exp_name = "gaussian-noise-{}".format(var)
+        exp_results(exp_name, imgs, ref_img, n_interest_points=12, variance=var, noise=True)
+
+    variances = [1, 5]
+
+    for var in variances:
+        exp_name = "gaussian-noise-unnormalized-{}".format(var)
+        exp_results(exp_name, imgs, ref_img, normalized=False, n_interest_points=12, variance=var, noise=True)
 
     imgs = [left2, left1, right1, right2]
     options = ["avg", "max"]

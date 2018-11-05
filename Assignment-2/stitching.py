@@ -253,13 +253,16 @@ def merge_images(imgs, xmaxs, xmins, ymaxs, ymins, method="add"):
                 np.maximum(img[mask_1],
                            merged[ymins[i] - ymin: ymins[i] - ymin + img.shape[0],
                            xmins[i] - xmin: xmins[i] - xmin + img.shape[1]][mask_1])
-            merged[ymins[i] - ymin: ymins[i] - ymin + img.shape[0], xmins[i] - xmin: xmins[i] - xmin + img.shape[1]][mask_2] = img[mask_2]
+            merged[ymins[i] - ymin: ymins[i] - ymin + img.shape[0], xmins[i] - xmin: xmins[i] - xmin + img.shape[1]][
+                mask_2] = img[mask_2]
         elif method == "avg":
-            merged[ymins[i] - ymin: ymins[i] - ymin + img.shape[0], xmins[i] - xmin: xmins[i] - xmin + img.shape[1]][mask_1] = \
+            merged[ymins[i] - ymin: ymins[i] - ymin + img.shape[0], xmins[i] - xmin: xmins[i] - xmin + img.shape[1]][
+                mask_1] = \
                 (img[mask_1] +
                  merged[ymins[i] - ymin: ymins[i] - ymin + img.shape[0],
                  xmins[i] - xmin: xmins[i] - xmin + img.shape[1]][mask_1]) / 2
-            merged[ymins[i] - ymin: ymins[i] - ymin + img.shape[0], xmins[i] - xmin: xmins[i] - xmin + img.shape[1]][mask_2] = img[mask_2]
+            merged[ymins[i] - ymin: ymins[i] - ymin + img.shape[0], xmins[i] - xmin: xmins[i] - xmin + img.shape[1]][
+                mask_2] = img[mask_2]
 
     return merged.astype(np.uint8)
 
@@ -319,7 +322,8 @@ if __name__ == "__main__":
     ref_img = mid
 
 
-    def exp_results(exp_name, imgs, ref_img, normalized=True,variance=1, method="add", n_interest_points=15, noise=False):
+    def exp_results(exp_name, imgs, ref_img, normalized=True, variance=1, method="add", n_interest_points=15,
+                    noise=False):
         points_file = exp_name + "-points.txt"
         merged = experiment(imgs, ref_img, points_file, normalized, variance, method, n_interest_points, noise=noise)
         plt.imshow(merged)

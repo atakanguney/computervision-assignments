@@ -179,6 +179,9 @@ def warp(image, H):
     ypsize = ymax - ymin
     xpsize = xmax - xmin
 
+    if ypsize > 50000 or xpsize > 50000:
+        raise ValueError("You probably select wrong correspondences")
+
     mesh = np.meshgrid(xp, yp, indexing="ij")
     new_image = np.zeros([ypsize, xpsize, 3])
 
@@ -216,10 +219,6 @@ def add_noise(variance, points):
     for img in points:
         new_points[img] = np.array(points[img]) + np.random.rand(len(points[img]), 2) * variance
     return new_points
-
-
-def merge_image(merged, img, xminim, yminim, xmin, ymin, method="add"):
-    return merged
 
 
 def merge_images(imgs, xmaxs, xmins, ymaxs, ymins, method="add"):
@@ -295,6 +294,44 @@ def get_warpeds(imgs, fname, normalized=True, variance=1, n_interest_points=15, 
     return warpeds, xmaxs, xmins, ymaxs, ymins
 
 
+def blend(imgs, fname, normalized=True, variance=1, method="add", n_interest_points=15, noise=False):
+
+    n_imgs = len(imgs)
+
+    blended = imgs[0]
+
+    i = 1
+    while i < n_imgs:
+
+        # Get correspondences
+        imgs_ = {
+            "blended": blended,
+            "next": imgs[i]
+        }
+        int_points = interest_points(imgs_, n_interest_points)
+        save_points(fname, int_points)
+
+        if noise:
+            int_points = add_noise(variance, int_points)
+
+        # Compute H matrix
+        H = computeH(int_points["next"], int_points["blended"], normalized=normalized)
+
+        warped , xmin, xmax, ymin, ymax = warp(imgs_["next"], H)
+
+        xmaxs = [imgs_["blended"].shape[1], xmax]
+        xmins = [0, xmin]
+
+        ymaxs = [imgs_["blended"].shape[0], ymax]
+        ymins = [0, ymin]
+
+        blended = merge_images([blended, warped], xmaxs, xmins, ymaxs, ymins, method)
+
+        i += 1
+
+    return blended
+
+
 def experiment(imgs, ref_img, fname, normalized=True, variance=1, method="add", n_interest_points=15, noise=False):
     imgs_ = []
     for img in imgs:
@@ -318,14 +355,15 @@ if __name__ == "__main__":
     right1 = plt.imread("cmpe-building/right-1.jpg")
     right2 = plt.imread("cmpe-building/right-2.jpg")
 
-    imgs = [left1, right1]
+    imgs = [left1, mid, right1]
     ref_img = mid
 
 
     def exp_results(exp_name, imgs, ref_img, normalized=True, variance=1, method="add", n_interest_points=15,
                     noise=False):
         points_file = exp_name + "-points.txt"
-        merged = experiment(imgs, ref_img, points_file, normalized, variance, method, n_interest_points, noise=noise)
+        # merged = experiment(imgs, ref_img, points_file, normalized, variance, method, n_interest_points, noise=noise)
+        merged = blend(imgs, points_file, normalized, variance, method, n_interest_points, noise=noise)
         plt.imshow(merged)
         plt.savefig(exp_name + ".png")
         plt.title(exp_name)

@@ -11,39 +11,85 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import cdist
 # %%
+def non_max_suppression(matrix, rows, cols, nms_size):
+    corners = []
+    for row, col in zip(rows, cols):
+        # Find lower and upper bounds for row
+        row_low = max(0, row - nms_size)
+        row_up = min(matrix.shape[0], row + nms_size)
+        
+        # Find lower and upper bounds for column
+        col_low = max(0, col - nms_size)
+        col_up = min(matrix.shape[1], col + nms_size)
+        
+        # Find local max
+        local_matrix = matrix[row_low:row_up, col_low:col_up]
+        #local_max = local_matrix.max()
+        local_max_arg = np.unravel_index(local_matrix.argmax(), local_matrix.shape)
+        
+        row_max = row_low + local_max_arg[0]
+        col_max = col_low + local_max_arg[1]
+        
+        if not (row_max, col_max) in corners:
+            corners.append((row_max, col_max))
+     
+    corners = np.array(corners)
+    
+    return corners[:, 0], corners[:, 1]
+
+
+def normalize(matrix, new_min, new_max):
+    min_ = np.min(matrix)
+    max_ = np.max(matrix)
+    
+    slope = (new_max - new_min) / (max_ - min_)
+    return (matrix - min_) * slope + new_min
+
+
 # Harris Corner Detector
-def myHarrisCornerDetector(image, ksize=11, k=0.06, threshold=None):
+def myHarrisCornerDetector(image, ksize=5, k=0.04, threshold=None, nms_size=5):
     # Compute x and y derivatives
-    derivatives_x = cv.Sobel(image, cv.CV_64F, 1, 0, ksize=ksize)
-    derivatives_y = cv.Sobel(image, cv.CV_64F, 0, 1, ksize=ksize)
-    print("Derivatives shape: {}".format(derivatives_y.shape))
+    derivatives_x = cv.Sobel(image, cv.CV_64FC1, 1, 0, ksize=ksize)
+    derivatives_y = cv.Sobel(image, cv.CV_64FC1, 0, 1, ksize=ksize)
     # Compute products of derivatives at every pixel
     derivatives_xx = derivatives_x ** 2
     derivatives_yy = derivatives_y ** 2
     derivatives_xy = derivatives_x * derivatives_y
     # Compute the sums of products of derivatives at each pixel
-    s_xx = cv.GaussianBlur(derivatives_xx, (ksize, ksize), 1)
-    s_yy = cv.GaussianBlur(derivatives_yy, (ksize, ksize), 1)
-    s_xy = cv.GaussianBlur(derivatives_xy, (ksize, ksize), 1)
+    s_xx = cv.GaussianBlur(derivatives_xx, (ksize, ksize), 1, 0)
+    s_yy = cv.GaussianBlur(derivatives_yy, (ksize, ksize), 0, 1)
+    s_xy = cv.GaussianBlur(derivatives_xy, (ksize, ksize), 1, 1)
     # Define at each pixel
         # H(x, y)
     # Compute the response of the detector at each pixel
     det = s_xx * s_yy - s_xy * s_xy
     trace = s_xx + s_yy
-    r = det - k * (trace * trace)
-    print("MAX R: {}".format(r.max()))
-    print("MIN R: {}".format(r.min()))
-    # Threshold on value of R. Compute nonmax supression
-    if not threshold:
-        threshold = r.max() * 0.01
+    r = det - k * (trace ** 2)
+    # print("MAX R: {}".format(r.max()))
+    # print("MIN R: {}".format(r.min()))
+    
+    # TODO: inspect normalizing r values
+    # r = normalize(r, 0, 255)
+    
+    # print("MAX R: {}".format(r.max()))
+    # print("MIN R: {}".format(r.min()))
 
+    # Threshold on value of R
+    if not threshold:
+        #threshold = r.max() * 0.01
+        threshold = r.max() * 0.01
+        
     y, x = np.where(r > threshold)
+
+    # Compute nonmax supression
+    y, x = non_max_suppression(r, y, x, nms_size)
+    
     return x, y
 
 # %%
 kuzey_path = "Images/kuzey.jpg"
 
-kuzey = cv.imread(kuzey_path, 0) * (1 / 255.0)
+kuzey = cv.imread(kuzey_path, 0)
 #plt.imshow(kuzey, cmap="gray")
 
 # for threshold in range(100, 300, 25):
@@ -159,7 +205,7 @@ for i in range(1, n_images + 1):
     images.append(cv.cvtColor(cv.imread("Images/img{}.png".format(i)), cv.COLOR_BGR2RGB))
 
 # Find key points with myHarrisCornerDetector
-gray_images = [cv.cvtColor(img, cv.COLOR_RGB2GRAY) * (1.0 / 255) for img in images]
+gray_images = [cv.cvtColor(img, cv.COLOR_RGB2GRAY) for img in images]
 key_points_harris = [np.array(myHarrisCornerDetector(gray)).squeeze() for gray in gray_images]
 # Find key points with SIFT detector
 gray_images = [cv.cvtColor(img, cv.COLOR_RGB2GRAY) for img in images]

@@ -11,31 +11,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import cdist
 # %%
-def non_max_suppression(matrix, rows, cols, nms_size):
-    corners = []
-    for row, col in zip(rows, cols):
-        # Find lower and upper bounds for row
-        row_low = max(0, row - nms_size)
-        row_up = min(matrix.shape[0], row + nms_size)
-        
-        # Find lower and upper bounds for column
-        col_low = max(0, col - nms_size)
-        col_up = min(matrix.shape[1], col + nms_size)
-        
-        # Find local max
-        local_matrix = matrix[row_low:row_up, col_low:col_up]
-        #local_max = local_matrix.max()
-        local_max_arg = np.unravel_index(local_matrix.argmax(), local_matrix.shape)
-        
-        row_max = row_low + local_max_arg[0]
-        col_max = col_low + local_max_arg[1]
-        
-        if not (row_max, col_max) in corners:
-            corners.append((row_max, col_max))
-     
-    corners = np.array(corners)
+def non_max_suppression(matrix, nms_size):
+
+    if nms_size:
+        kernel = np.ones((nms_size, nms_size), np.float64)
+    else:
+        kernel = None
     
-    return corners[:, 0], corners[:, 1]
+    matrix_dilated = cv.dilate(matrix, kernel)
+    matrix_eroded = cv.erode(matrix, nms_size)
+    
+    mask = cv.compare(matrix, matrix_dilated, cv.CMP_GE)
+    mask_non_plateaus = cv.compare(matrix, matrix_eroded, cv.CMP_GT)
+    mask = cv.bitwise_and(mask, mask_non_plateaus)
+
+    return np.where(mask > 0)
 
 
 def normalize(matrix, new_min, new_max):
@@ -47,62 +37,81 @@ def normalize(matrix, new_min, new_max):
 
 
 # Harris Corner Detector
-def myHarrisCornerDetector(image, ksize=5, k=0.04, threshold=None, nms_size=5):
+def myHarrisCornerDetector(image, block_size=11, ksize=3, k=0.04, threshold=None, nms_size=None):
+    # Convert image to grayscale
+    image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    image = np.float32(image)
+    
     # Compute x and y derivatives
-    derivatives_x = cv.Sobel(image, cv.CV_64FC1, 1, 0, ksize=ksize)
-    derivatives_y = cv.Sobel(image, cv.CV_64FC1, 0, 1, ksize=ksize)
+    derivatives_x = cv.Sobel(image, cv.CV_32F, 1, 0, ksize=ksize)
+    derivatives_y = cv.Sobel(image, cv.CV_32F, 0, 1, ksize=ksize)
     # Compute products of derivatives at every pixel
     derivatives_xx = derivatives_x ** 2
     derivatives_yy = derivatives_y ** 2
     derivatives_xy = derivatives_x * derivatives_y
     # Compute the sums of products of derivatives at each pixel
-    s_xx = cv.GaussianBlur(derivatives_xx, (ksize, ksize), 1, 0)
-    s_yy = cv.GaussianBlur(derivatives_yy, (ksize, ksize), 0, 1)
-    s_xy = cv.GaussianBlur(derivatives_xy, (ksize, ksize), 1, 1)
+    s_xx = cv.GaussianBlur(derivatives_xx, (block_size, block_size), 1, 0)
+    s_yy = cv.GaussianBlur(derivatives_yy, (block_size, block_size), 0, 1)
+    s_xy = cv.GaussianBlur(derivatives_xy, (block_size, block_size), 1, 1)
     # Define at each pixel
         # H(x, y)
     # Compute the response of the detector at each pixel
     det = s_xx * s_yy - s_xy * s_xy
     trace = s_xx + s_yy
     r = det - k * (trace ** 2)
-    # print("MAX R: {}".format(r.max()))
-    # print("MIN R: {}".format(r.min()))
+    print("MAX R: {}".format(r.max()))
+    print("MIN R: {}".format(r.min()))
     
     # TODO: inspect normalizing r values
-    # r = normalize(r, 0, 255)
+    #r = normalize(r, 0, r.max() - r.min())
     
     # print("MAX R: {}".format(r.max()))
     # print("MIN R: {}".format(r.min()))
 
     # Threshold on value of R
     if not threshold:
-        #threshold = r.max() * 0.01
         threshold = r.max() * 0.01
-        
-    y, x = np.where(r > threshold)
+    
+    # r = cv.dilate(r, None)
+    
+    # y, x = np.where(r > threshold)
+    r_new = np.zeros(r.shape)
+    r_new[r > threshold] = r[r > threshold]
 
     # Compute nonmax supression
-    y, x = non_max_suppression(r, y, x, nms_size)
+    y, x = non_max_suppression(r_new, nms_size)
     
+    # print("After nonmax: {}".format(len(y)))
     return x, y
 
 # %%
 kuzey_path = "Images/kuzey.jpg"
 
-kuzey = cv.imread(kuzey_path, 0)
-#plt.imshow(kuzey, cmap="gray")
-
-# for threshold in range(100, 300, 25):
-#     x, y = myHarrisCornerDetector(kuzey, threshold=threshold)
-#     print("Detected Corners: {}".format(len(x)))
-x, y = myHarrisCornerDetector(kuzey)
+kuzey = cv.imread(kuzey_path)
+x, y, = myHarrisCornerDetector(kuzey)
 kuzey_bgr = cv.imread(kuzey_path)
 kuzey_rgb = cv.cvtColor(kuzey_bgr, cv.COLOR_BGR2RGB)
 
 plt.imshow(kuzey_rgb)
 plt.plot(x, y, "xy", markersize=2)
+plt.savefig("kuzey_harris.jpg")
 plt.show()
 
+# %%
+kuzey_path = "Images/kuzey.jpg"
+
+kuzey = cv.imread(kuzey_path)
+gray = cv.cvtColor(kuzey, cv.COLOR_BGR2GRAY)
+gray = np.float32(gray)
+dst = cv.cornerHarris(gray,11,3,0.05)
+#result is dilated for marking the corners, not important
+dst = cv.dilate(dst,None)
+
+print(dst.max())
+# Threshold for an optimal value, it may vary depending on the image.
+kuzey[dst>0.01*dst.max()]=[0,0,255]
+
+plt.imshow(cv.cvtColor(kuzey, cv.COLOR_BGR2RGB))
 # %%
 # Preprocessing - 1
 def preprocessin_part1(qualities=None):
@@ -162,8 +171,8 @@ def size_epsilon_neighborhood(homography1to2, key_points1, key_points2, epsilon)
 
 def measureRepeatability(keyPoints1, keyPoints2, homography1to2, image2size, epsilon=1.5):
     # Convert key points into compatible format
-    print("Key points image 1: {}".format(keyPoints1.shape[1]))
-    print("Key points image 2: {}".format(keyPoints2.shape[1]))
+    print("Key points image 1: {}".format(keyPoints1.shape))
+    print("Key points image 2: {}".format(keyPoints2.shape))
     keyPoints1 = convert_homogenous(keyPoints1)
     keyPoints2 = convert_homogenous(keyPoints2)
     
@@ -202,11 +211,10 @@ n_images = 6
 
 images = []
 for i in range(1, n_images + 1):
-    images.append(cv.cvtColor(cv.imread("Images/img{}.png".format(i)), cv.COLOR_BGR2RGB))
+    images.append(cv.imread("Images/img{}.png".format(i)))
 
 # Find key points with myHarrisCornerDetector
-gray_images = [cv.cvtColor(img, cv.COLOR_RGB2GRAY) for img in images]
-key_points_harris = [np.array(myHarrisCornerDetector(gray)).squeeze() for gray in gray_images]
+key_points_harris = [np.array(myHarrisCornerDetector(img)).squeeze() for img in images]
 # Find key points with SIFT detector
 gray_images = [cv.cvtColor(img, cv.COLOR_RGB2GRAY) for img in images]
 sift = cv.xfeatures2d.SIFT_create()
@@ -215,6 +223,15 @@ key_points_sift = [np.array(list(map(lambda x: x.pt, sift.detect(gray, None)))).
 surf = cv.xfeatures2d.SURF_create()
 key_points_surf = [np.array(list(map(lambda x: x.pt, surf.detect(gray, None)))).squeeze().T for gray in gray_images]
 
+def harris_opencv(img):
+    img = np.float32(img)
+    dst = cv.cornerHarris(gray,2,3,0.04)
+    
+    y, x = np.where(dst > dst.max() * 0.01)
+    
+    return x, y
+
+key_points_harris_true = [np.array(harris_opencv(img)).squeeze() for img in gray_images]
 # %%
 # Read homography matrices
 homographies = [
@@ -228,29 +245,37 @@ homos = []
 for homo in homographies:
     homos.append(read_homography(homo))
 # %%
-def plot_harris(img, kp, plt):
-    plt.imshow(img)
-    plt.plot(kp[0], kp[1], "xy", markersize=2)
+def plot_harris(img, kp):
+    plt.imshow(cv.cvtColor(img, cv.COLOR_BGR2RGB))
+    print(kp.shape)
+    plt.plot(kp[0], kp[1], "xm", markersize=2)
+    plt.show()
 
 # %%
 # Measure repeatabilty for each 3 detector
 repeatabilities_harris = []
 repeatabilities_sift = []
 repeatabilities_surf = []
+repeatabilities_harris_opencv = []
 
 for img in range(1, n_images):
     harris = measureRepeatability(key_points_harris[0], key_points_harris[img], homos[img - 1], gray_images[img].shape, epsilon=1.5)
     sift = measureRepeatability(key_points_sift[0], key_points_sift[img], homos[img - 1], gray_images[img].shape)
     surf = measureRepeatability(key_points_surf[0], key_points_surf[img], homos[img - 1], gray_images[img].shape)
+    harris_opencv = measureRepeatability(key_points_harris_true[0], key_points_harris_true[img], homos[img - 1], gray_images[img].shape, epsilon=1.5)
     repeatabilities_harris.append(harris)
     repeatabilities_sift.append(sift)
     repeatabilities_surf.append(surf)
+    repeatabilities_harris_opencv.append(harris_opencv)
+
 # %%
 # Plot the results
-images = [i for i in range(1, n_images)]
-plt.plot(images, repeatabilities_harris, "-xy", markersize=10)
-plt.plot(images, repeatabilities_sift, "-og", markersize=10)
-plt.plot(images, repeatabilities_surf, "->k", markersize=10)
-plt.legend(["myHarris", "Sift", "Surf"])
-plt.xticks(images, ["1-2", "1-3", "1-4", "1-5", "1-6"])
+imgs = [i for i in range(1, n_images)]
+plt.plot(imgs, repeatabilities_harris, "-xy", markersize=10)
+plt.plot(imgs, repeatabilities_sift, "-og", markersize=10)
+plt.plot(imgs, repeatabilities_surf, "->k", markersize=10)
+plt.plot(imgs, repeatabilities_harris_opencv, "-<m", markersize=10)
+plt.legend(["myHarris", "Sift", "Surf", "OpenCV-Harris"])
+plt.xticks(imgs, ["1-2", "1-3", "1-4", "1-5", "1-6"])
 plt.ylabel("Repeatability Rate")
+plt.show()

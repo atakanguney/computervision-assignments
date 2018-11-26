@@ -1,0 +1,300 @@
+% --------------------------------------------------------------
+% This is all preamble stuff that you don't have to worry about.
+% Head down to where it says "Start here"
+% --------------------------------------------------------------
+ 
+\documentclass[12pt]{article}
+ 
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage[margin=1in]{geometry} 
+\usepackage{amsmath,amsthm,amssymb}
+\usepackage{hyperref}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{float}
+
+\makeatletter
+\def\BState{\State\hskip-\ALG@thistlm}
+\makeatother
+
+\title{CMPE - 59H \\ Assignment 3 \\ Interest Point Detectors}
+\author{Abdullah Atakan Guney \\ 2018700069}
+
+\begin{document}
+ 
+% --------------------------------------------------------------
+%                         Start here
+% --------------------------------------------------------------
+ 
+%\renewcommand{\qedsymbol}{\filledbox}
+ 
+\maketitle
+
+\newpage
+
+\tableofcontents
+
+\newpage
+
+\section{Harris Corner Detector}
+In this assignment, the aim is to compare different kinds of interest points detectors. In the first part, I have implemented \textbf{\textit{Harris Corner Detector}} by using "numpy", "opencv" libraries additional to python built-in methods. I have followed steps that have been described in \href{http://www.cse.psu.edu/~rtc12/CSE486/lecture06.pdf}{this presentation}.  Pseudocode of my implementation is following:
+
+\begin{algorithm}
+\caption{Harris Corner Detection Alogrithm}\label{}
+\begin{algorithmic}[1]
+\Procedure{myHarrisCornerDetector}{}
+\State $I_{x} \gets \text{Calculate Derivative with Sobel operator in x}$
+\State $I_{y} \gets \text{Calculate Derivative with Sobel operator in y}$
+\State $I_{x^2} \gets I_x \odot I_x$
+\State $I_{y^2} \gets I_y \odot I_y$
+\State $I_{xy} \gets I_x \odot I_y$
+\State $S_{x^2} \gets \text{Convolve } I_{x^2} \text{ with Gaussian kernel}$
+\State $S_{y^2} \gets \text{Convolve } I_{y^2} \text{ with Gaussian kernel}$
+\State $S_{xy} \gets \text{Convolve } I_{xy} \text{ with Gaussian kernel}$
+\State $\text{determinant of} \textit{ H} \gets S_{x^2} \odot S_{y^2} - S_{xy} \odot S_{xy}$
+\State $\text{trace of } \textit{H} \gets S_{x^2} + S_{y^2}$
+\State $R \gets \text{determinantH} - k \times (traceH \odot traceH)$
+\State $R \gets \text{thresholding on R}$
+\State $\text{Compute non-max suppression on R}$ 
+\State \Return Local maxima of R
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{My Harris Corner Detector Results}
+I have selected k as 0.04, ksize which is kernel size for Sobel operator as 3, block size which is kernel size for Gaussian kernel as 7.
+Here is the result of my Harris corner detector implementation on the picture of north campus. See the results with different block sizes
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height=0.75\textwidth]{images/kuzey_harris-3.png}
+        \caption{Block size = 3}
+        \label{block-size-3}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height=0.75\textwidth]{images/kuzey_harris-5.png}
+        \caption{Block size = 5}
+        \label{block-size-5}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height=0.75\textwidth]{images/kuzey_harris-7.png}
+        \caption{Block size = 7}
+        \label{block-size-7}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth, height=0.75\textwidth]{images/kuzey_harris-11.png}
+        \caption{Block size = 11}
+        \label{block-size-11}
+    \end{subfigure}
+    \caption{Harris with different block sizes}
+    \label{fig:bloc-size}
+\end{figure}
+
+As we can easily observe that with block size increasing, the number of detected corner points is also increasing.
+
+\section{Data}
+There are 3 different data set I have used to compare 3 different kinds of corner detectors. These are following:
+
+\begin{itemize}
+    \item My Harris Corner Detector
+    \item SIFT (Scale-Invariant Feature Transform)
+    \item SURF (Speeded-Up Robust  Features)
+\end{itemize}
+
+\subsection{JPEG quality different north campus}
+Here are versions with different JPEG quality of an image of north campus.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/kuzey-5.jpg}
+        \caption{With quality = 5}
+        \label{jpeg-5}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/kuzey-25.jpg}
+        \caption{With quality = 25}
+        \label{jpeg-25}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/kuzey-45.jpg}
+        \caption{With quality = 45}
+        \label{jpeg-45}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/kuzey-65.jpg}
+        \caption{With quality = 65}
+        \label{jpeg-65}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/kuzey-85.jpg}
+        \caption{With quality = 85}
+        \label{jpeg-85}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/kuzey-105.jpg}
+        \caption{With quality = 105}
+        \label{jpeg-105}
+    \end{subfigure}
+    \caption{JPEG Qualities}
+    \label{fig:jpeg-quality}
+\end{figure}
+
+As a note, I have used opencv's `imwrite` function to get these images.
+
+\subsection{North Campus with different levels of Gaussian Noise}
+I have added Gaussian Noises with different variances to the image of north campus. Let us see the results.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/kuzey-var-5.jpg}
+        \caption{With variance = 5}
+        \label{noise-var-5}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/kuzey-var-50.jpg}
+        \caption{With variance = 50}
+        \label{noise-var-50}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/kuzey-var-100.jpg}
+        \caption{With variance = 100}
+        \label{noise-var-100}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/kuzey-var-150.jpg}
+        \caption{With variance = 150}
+        \label{noise-150}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/kuzey-var-200.jpg}
+        \caption{With variance = 200}
+        \label{noise-200}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/kuzey-var-250.jpg}
+        \caption{With variance = 250}
+        \label{noise-250}
+    \end{subfigure}
+    \caption{Different Levels of Gaussian Noise}
+    \label{fig:gaussian-noise}
+\end{figure}
+
+\subsection{Graffiti Image Set}
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/img1.png}
+        \caption{Base Image}
+        \label{graffiti-1}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/img2.png}
+        \caption{Image 2}
+        \label{graffiti-2}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/img3.png}
+        \caption{Image 3}
+        \label{graffiti-3}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/img4.png}
+        \caption{Image 4}
+        \label{graffiti-4}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/img5.png}
+        \caption{Image 5}
+        \label{graffiti-5}
+    \end{subfigure}
+    \begin{subfigure}{0.45\textwidth}
+        \centering
+        \includegraphics[height=0.75\textwidth]{images/img6.png}
+        \caption{Image 6}
+        \label{graffiti-6}
+    \end{subfigure}
+    \caption{Graffiti Image Set}
+    \label{fig:graffiti}
+\end{figure}
+
+\section{Measuring Repeatability}
+
+Repeatability is a measure that gives us the ability to compare different kinds of detectors. Here is the formula for it.
+
+\begin{align*}
+    r_i(\epsilon) & = \frac{\left| R_i(\epsilon) \right|}{min(n_i, n_1)} \\
+    R_i(epsilon) & = \{\left( \tilde{x_1}, \tilde{x_i} \right) | dist(H_{1i}\tilde{x_1}, \tilde{x_i}) < \epsilon, \text{ where } \tilde{x_1} \in \tilde{X_1}, \tilde{x_i} \in \tilde{X_i} \} \\
+    n_i & = \left| \tilde{X_i} \right| \\
+    n_1 & = \left| \tilde{X_1} \right| \\
+    \tilde{X_1} & = \{x_1 | H_{1i}x_1 \in \text{ Image i}\} \\
+    \tilde{X_i} & = \{x_i | H_{i1}x_i \in \text{ Image 1}\}
+\end{align*}
+    
+Here is pseudocode of my implementation of this measure:
+\begin{algorithm}
+\caption{Repeatability Measure Algorithm}\label{repeatability}
+\begin{algorithmic}[1]
+\Procedure{measureRepeatability}{keyPoints1, keyPoints2, $H_{12}$, image2size, $\epsilon=1.5$}
+\State Convert keyPoints1 and keyPoints2 to homogeneous coordinates
+\State $keyPoints_{12} \gets H_{12} \times keyPoints_1$
+\State $keyPoints_{21} \gets H_{12}^{-1} \times keyPoints_2$
+\State $commonPart_1 \gets keyPoinst_1[keyPoints_{12} \in \text{image2boundary}]$
+\State $commonPart_2 \gets keyPoinst_2[keyPoints_{21} \in \text{image1boundary}]$
+\State $N_1 \gets \text{Size of } commonPart1$
+\State $N_2 \gets \text{Size of } commonPart2$
+\State $R \gets \epsilon-neighborhood(H_{12} \times commonPart1, commonPart2)$
+\State \Return $\text{Size of } R / min(N1, N2)$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Results}
+Lets see the results for 3 different kinds of image sets.
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics{images/repeatabilities-graffiti.png}
+    \caption{Results for Graffiti Set}
+    \label{graffiti}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics{images/repeatabilities-jpeg.png}
+    \caption{Results for North Campus with Different JPEG quality Set}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics{images/repeatabilities-var.png}
+    \caption{Results for North Campus with Different Levels of Gaussian Noise Set}
+\end{figure}
+
+\subsection{Conclusion}
+As I have observed from results, quality of the image is not important for detectors except SIFT, Gaussian noise affects detectors obviously. From the graffiti set, it shows that with the rotations, based on rotation angle and direction, it differs that which detector is better. If we rotate the image with angle $\alpha$, SIFT seems to have high repeatability, on the other hand if we move camera in to another place Harris seems more reliable. For the quality, Harris results better than others. And for noise case, Harris is still better most of the time but with increasing noise level, SURF gets better than Harris.
+\end{document}

@@ -1,0 +1,20 @@
+# Python
+__pycache__/*
+
+# Vscode
+.vscode/*
+
+# PyCharm
+.idea/*
+
+# Jupyter
+.ipynb_checkpoints/*
+*.ipynb
+
+# Data
+*.zip
+.DS_Store
+data/*
+
+# OpenCV
+opencv_cpp/*

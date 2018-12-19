@@ -13,7 +13,10 @@ def multi_scale_detector(img, classifier, downscale, win_size, win_stride):
     scale = 1
 
     for resized in pyramid_gaussian(img, downscale=downscale, multichannel=False):
+
+        print(resized.shape)
         if resized.shape[0] < win_size[0] or resized.shape[1] < win_size[1]:
+            print("Break occured")
             break
 
         windows = extract_patches(resized, patch_shape=win_size, extraction_step=win_stride)
@@ -21,8 +24,10 @@ def multi_scale_detector(img, classifier, downscale, win_size, win_stride):
         for row in range(windows.shape[0]):
             for col in range(windows.shape[1]):
                 hog_ = hog_features(windows[row][col])
-
+                print(hog_.shape)
+                print(classifier.predict(hog_.reshape(1, -1)))
                 if classifier.predict(hog_.reshape(1, -1)):
+                    print("Face detected")
                     x1 = row * win_stride[0] * scale
                     y1 = col * win_stride[1] * scale
                     x2 = x1 + win_size[0] * scale

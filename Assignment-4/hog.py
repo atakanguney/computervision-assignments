@@ -38,6 +38,40 @@ def divide_cells(magnitudes, angles, cell_size):
         yield magnitudes[row, col], angles[row, col]
 
 
+def _divide_cells(magnitudes, angles, cell_size):
+    img_rows, img_cols = magnitudes.shape
+    cell_rows, cell_cols = cell_size
+
+    mag_strides = magnitudes.strides
+    ang_strides = angles.strides
+
+    new_rows = img_rows // cell_rows
+    new_cols = img_cols // cell_cols
+
+    new_shape = (new_rows, new_cols, cell_rows, cell_cols)
+    new_mag_strides = (cell_rows * mag_strides[0],
+                       cell_cols * mag_strides[1],
+                       mag_strides[0],
+                       mag_strides[1],)
+    new_ang_strides = (cell_rows * ang_strides[0],
+                       cell_cols * ang_strides[1],
+                       ang_strides[0],
+                       ang_strides[1],)
+
+    cell_magnitudes = np.lib.stride_tricks.as_strided(
+        magnitudes,
+        shape=new_shape,
+        strides=new_mag_strides
+    )
+
+    cell_angles = np.lib.stride_tricks.as_strided(
+        angles,
+        shape=new_shape,
+        strides=new_ang_strides
+    )
+
+    return cell_magnitudes, cell_angles
+
 
 def divide_blocks(magnitude, angle, block_size, block_stride):
     blocks_magnitudes = extract_patches(magnitude, patch_shape=block_size, extraction_step=block_stride)
@@ -46,14 +80,11 @@ def divide_blocks(magnitude, angle, block_size, block_stride):
     return blocks_magnitudes, blocks_angles
 
 
-def _weighted_hist(matrix):
-    half = len(matrix) // 2
-    magnitude = matrix[:half]
-    angle = matrix[half:]
+def _weighted_hist(magnitudes, angles):
 
-    idx = np.int64(angle // 20)
+    idx = np.int64(angles // 20)
 
-    prop1 = angle - idx * 20.0
+    prop1 = angles - idx * 20.0
     prop2 = 20.0 - prop1
 
     lambda1 = prop2 / 20.0
@@ -62,46 +93,37 @@ def _weighted_hist(matrix):
     idx1 = idx % 9
     idx2 = (idx + 1) % 9
 
-    mag1 = lambda1 * magnitude
-    mag2 = lambda2 * magnitude
+    mag1 = lambda1 * magnitudes
+    mag2 = lambda2 * magnitudes
 
-    hist = []
+    hists = []
+
     for i in range(9):
-        hist.append(mag1[idx1 == i].sum() + mag2[idx2 == i].sum())
+        hists.append((mag1 * (idx1 == i)).sum(axis=(-1, -2)) + (mag2 * (idx2 == i)).sum(axis=(-1, -2)))
 
-    return np.array(hist)
+    hists = np.array(hists)
+
+    return hists.transpose([1, 2, 0])
 
 
 def weighted_hist_vectors(magnitudes, angles, cell_size):
-    img_shape = magnitudes.shape
 
-    n_rows, n_cols = img_shape
-    c_rows, c_cols = cell_size
+    cell_magnitudes, cell_angles = _divide_cells(magnitudes, angles, cell_size)
 
-    assert n_rows > c_rows and n_cols > c_cols
+    hists = _weighted_hist(cell_magnitudes, cell_angles)
 
-    cells_r = n_rows // c_rows
-    cells_c = n_cols // c_cols
-
-    cells_magnitudes = []
-    cells_angles = []
-    magang = []
-    for cell_mag, cell_ang in divide_cells(magnitudes, angles, cell_size):
-        cells_magnitudes.append(cell_mag)
-        cells_angles.append(cell_ang)
-        magang.append(np.concatenate([cell_mag.flatten(), cell_ang.flatten()]))
-
-    magang = np.array(magang)
-    hists = np.apply_along_axis(_weighted_hist, axis=1, arr=magang)
-    return hists.reshape([cells_r, cells_c, -1])
+    return hists
 
 
-def _group_and_normalize(hist_vectors, block_size, block_stride):
+def group_and_normalize(hist_vectors, block_size, block_stride):
     # TODO: Make use of block stride
     blocks = extract_patches_2d(hist_vectors, patch_size=block_size)
     flattened = blocks.reshape([blocks.shape[0], -1])
-    normalized = np.apply_along_axis(lambda x: x / np.linalg.norm(x) if np.linalg.norm(x) > 0 else x, axis=1,
-                                     arr=flattened)
+
+    flattened = np.float64(flattened)
+    norms = np.sqrt(np.einsum("...i,...i", flattened, flattened))
+    epsilon = 10 ** -8
+    normalized = flattened / (norms + epsilon)[:, np.newaxis]
 
     return normalized
 
@@ -112,19 +134,21 @@ def hog_features(img, block_size=(2, 2), block_stride=(1, 1), cell_size=(6, 6)):
 
     hist_vectors = weighted_hist_vectors(magnitude, angle, cell_size)
 
-    normalized = _group_and_normalize(hist_vectors, block_size, block_stride)
+    normalized = group_and_normalize(hist_vectors, block_size, block_stride)
 
     return normalized.flatten()
 
 
 def extractHogFromImage(img_path, block_size=(2, 2), block_stride=(1, 1), cell_size=(6, 6)):
     img = cv.imread(img_path, 0)
+    img = np.float64(img) / 255.0
     return hog_features(img, block_size, block_stride, cell_size)
 
 
 def extractFromRandomCrop(img_path, win_size=(36, 36), win_stride=(48, 48), block_size=(2, 2), block_stride=(1, 1),
                           cell_size=(6, 6)):
     img = cv.imread(img_path, 0)
+    img = np.float64(img) / 255.0
 
     hogs = []
     patches = extract_patches(img, patch_shape=win_size, extraction_step=win_stride)
@@ -132,4 +156,4 @@ def extractFromRandomCrop(img_path, win_size=(36, 36), win_stride=(48, 48), bloc
         hogs.append(
             hog_features(patches[patch], block_size=block_size, block_stride=block_stride, cell_size=cell_size))
 
-    return hogs
+    return np.array(hogs)

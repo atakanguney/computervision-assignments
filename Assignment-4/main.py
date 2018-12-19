@@ -12,7 +12,7 @@ from visualization import visualize
 # %%
 NON_FACE_IMAGES_FOLDER = "data/NonFaceImages/"
 FACE_IMAGES_FOLDER = "data/FaceImages/"
-VALIDATION_IMAGES_FOLDER = "data/ValidationSet/"
+VALIDATION_IMAGES_FOLDER = "data/SampleValidationSet/"
 # %%
 
 
@@ -80,6 +80,6 @@ print("Mean IoU: {}".format(mean_intersection_over_union(detections_dict, valid_
 print("Average Precision: {}".format(average_precision(detections_dict, valid_gt_dict)))
 
 # %%
-sample_img_name = "baseball.jpg"
+sample_img_name = "addams-family.jpg"
 sample_img = cv.imread(VALIDATION_IMAGES_FOLDER + sample_img_name)
 visualize(sample_img, valid_gt_dict[sample_img_name], detections_dict[sample_img_name])

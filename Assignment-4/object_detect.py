@@ -1,48 +1,72 @@
 import numpy as np
 import cv2 as cv
-
-from skimage.transform import pyramid_gaussian
 from sklearn.feature_extraction.image import extract_patches
 
-from hog import hog_features
 
+def pyramid(image, scale=2, minSize=(36, 36)):
+    # yield the original image
+    yield image
 
-def multi_scale_detector(img, classifier, downscale, win_size, win_stride):
+    # keep looping over the pyramid
+    while True:
+        # compute the new dimensions of the image and resize it
+        w = int(image.shape[1] / scale)
+        image = cv.resize(image, (0, 0), fx=1.0 / scale, fy=1.0 / scale)
 
-    bounding_boxes = []
-    scale = 1
-
-    for resized in pyramid_gaussian(img, downscale=downscale, multichannel=False):
-
-        print(resized.shape)
-        if resized.shape[0] < win_size[0] or resized.shape[1] < win_size[1]:
-            print("Break occured")
+        # if the resized image does not meet the supplied minimum
+        # size, then stop constructing the pyramid
+        if image.shape[0] < minSize[1] or image.shape[1] < minSize[0]:
             break
 
-        windows = extract_patches(resized, patch_shape=win_size, extraction_step=win_stride)
+        # yield the next image in the pyramid
+        yield image
 
-        for row in range(windows.shape[0]):
-            for col in range(windows.shape[1]):
-                hog_ = hog_features(windows[row][col])
-                print(hog_.shape)
-                print(classifier.predict(hog_.reshape(1, -1)))
-                if classifier.predict(hog_.reshape(1, -1)):
-                    print("Face detected")
-                    x1 = row * win_stride[0] * scale
-                    y1 = col * win_stride[1] * scale
-                    x2 = x1 + win_size[0] * scale
-                    y2 = y1 + win_size[1] * scale
-                    bounding_boxes.append([x1, y1, x2, y2])
+
+def sliding_window(img, window_size, window_stride):
+    n_rows, n_cols = img.shape
+    s_row, s_col = window_stride
+    w_row, w_col = window_size
+
+    def _check_window_shape(shape1, shape2):
+        return shape1[0] == shape2[0] and shape1[1] == shape2[1]
+
+    for row in range(0, n_rows, s_row):
+        for col in range(0, n_cols, s_col):
+            window = img[row: row + w_row, col: col + w_col]
+
+            if _check_window_shape(window.shape, window_size):
+                yield (row, col, window)
+
+
+def multi_scale_detector(img, classifier, downscale, win_size, win_stride, hog_features, opencv=False):
+
+    bounding_boxes = []
+
+    scale = 1
+
+    for resized in pyramid(img, scale=2, minSize=win_size):
+
+        for row, col, window_img in sliding_window(resized, win_size, win_stride):
+            if opencv:
+                hog_ = hog_features(window_img.astype(np.uint8)).reshape(900)
+            else:
+                hog_ = hog_features(window_img)
+
+            if classifier.predict([hog_]):
+                rect = np.array(
+                    [row, col, row + win_size[0], col + win_size[1]])
+                rect *= scale
+                bounding_boxes.append(rect)
 
         scale *= 2
 
     return np.array(bounding_boxes)
 
 
-def get_images(image_paths):
+def get_images(image_paths, opencv=False):
     images = [cv.imread(img_path, 0) for img_path in image_paths]
-    images = [np.float64(img) / 255.0 for img in images]
-
+    if not opencv:
+        images = [np.float64(img) / 255.0 for img in images]
     return images
 
 
@@ -104,16 +128,18 @@ def non_max_suppression_fast(boxes, overlapThresh):
     return boxes[pick].astype("int")
 
 
-def detect_faces(image_paths, classifier, downscale=2, win_size=(36, 36), win_stride=(6, 6)):
+def detect_faces(image_paths, classifier, hog_features, downscale=2, win_size=(36, 36), win_stride=(6, 6), opencv=False):
 
     # Get images
-    images = get_images(image_paths)
+    images = get_images(image_paths, opencv=opencv)
 
     # Detect faces
     # Bounding boxes
-    bounding_boxes_all = [multi_scale_detector(img, classifier, downscale, win_size, win_stride) for img in images]
+    bounding_boxes_all = [multi_scale_detector(
+        img, classifier, downscale, win_size, win_stride, hog_features, opencv=opencv) for img in images]
 
     # apply non-maximum-suppression
-    detections_all = [non_max_suppression_fast(bounding_boxes, 0) for bounding_boxes in bounding_boxes_all]
+    detections_all = [non_max_suppression_fast(
+        bounding_boxes, 0) for bounding_boxes in bounding_boxes_all]
 
     return detections_all, bounding_boxes_all

@@ -13,7 +13,7 @@ def visualize(img, true_bb, pred_bb):
         ax.add_patch(rect)
 
     for bb in pred_bb:
-        if not bb:
+        if bb.size == 0:
             continue
         rect = patches.Rectangle((bb[0], bb[1]), bb[2] - bb[0], bb[3] - bb[1], linewidth=1, edgecolor="lime",
                                  facecolor="none")

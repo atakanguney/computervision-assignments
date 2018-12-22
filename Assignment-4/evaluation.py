@@ -3,6 +3,17 @@ import itertools as it
 import numpy as np
 
 
+def create_detections_dict(folder, detections):
+    assert os.path.exists(folder), "{} is not found".format(folder)
+
+    img_names = os.listdir(folder)
+    res_dict = {}
+    for i, name in enumerate(img_names):
+        res_dict[name] = detections[i]
+
+    return res_dict
+
+
 def bb_intersection_over_union(boxA, boxB):
     # determine the (x, y)-coordinates of the intersection rectangle
     xA = max(boxA[0], boxB[0])
@@ -30,8 +41,10 @@ def bb_intersection_over_union(boxA, boxB):
 def mean_intersection_over_union(predicted_bbs, true_bbs):
     iou = []
     for img in predicted_bbs:
+        if img not in true_bbs:
+            continue
         for true, pred in it.product(true_bbs[img], predicted_bbs[img]):
-            if pred:
+            if pred.size != 0:
                 iou.append(bb_intersection_over_union(true, pred))
 
     iou = np.array(iou)
@@ -45,9 +58,10 @@ def average_precision(predicted_bbs, true_bbs, threshold=0.5):
 
     precision_sum = 0
     for img in predicted_bbs:
+        if img not in true_bbs:
+            continue
         for true, pred in it.product(true_bbs[img], predicted_bbs[img]):
-            print(pred)
-            if not pred:
+            if pred.size == 0:
                 fn += 1
                 continue
             iou = bb_intersection_over_union(true, pred)
@@ -59,4 +73,4 @@ def average_precision(predicted_bbs, true_bbs, threshold=0.5):
         precision = tp / (tp + fp)
         precision_sum += precision
 
-    return precision_sum / len(true_bbs)
+    return precision_sum / len(predicted_bbs)

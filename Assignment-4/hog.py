@@ -3,215 +3,93 @@ import numpy as np
 from sklearn.feature_extraction.image import extract_patches, extract_patches_2d
 
 
-def compute_gradients(img, ksize=3):
-    gx = cv.Sobel(img, cv.CV_64F, 1, 0, ksize=ksize)
-    gy = cv.Sobel(img, cv.CV_64F, 0, 1, ksize=ksize)
+def compute_gradients(img):
 
-    magnitudes = ((gx ** 2 + gy ** 2) ** 0.5)
+    gaussian_blured = cv.GaussianBlur(img, (1, 1), 0, 0)
 
-    angles = np.arctan2(gy, gx)
-    angles[angles < 0] = angles[angles < 0] + np.pi
-    angles = np.rad2deg(angles)
+    kernel_x = np.array([
+        [-1, 0, 1]
+    ])
 
-    return magnitudes, angles
+    kernel_y = np.array([
+        [-1],
+        [0],
+        [1]
+    ])
 
+    gx = cv.filter2D(gaussian_blured, cv.CV_64F, kernel_x)
+    gy = cv.filter2D(gaussian_blured, cv.CV_64F, kernel_y)
 
-def _divide_cells(block_magnitudes, block_angles, cell_size):
-    w_rows, w_cols, b_rows, b_cols, b_height, b_width = block_magnitudes.shape
-    cell_height, cell_width = cell_size
-
-    mag_strides = block_magnitudes.strides
-    ang_strides = block_angles.strides
-
-    cell_rows = b_height // cell_height
-    cell_cols = b_width // cell_width
-
-    new_shape = (
-        w_rows, w_cols,
-        b_rows, b_cols,
-        cell_rows, cell_cols,
-        cell_height, cell_width,
-    )
-
-    new_mag_strides = (
-        mag_strides[0],
-        mag_strides[1],
-        mag_strides[2],
-        mag_strides[3],
-        mag_strides[4] * cell_height,
-        mag_strides[5] * cell_width,
-        mag_strides[4],
-        mag_strides[5],
-    )
-
-    new_ang_strides = (
-        ang_strides[0],
-        ang_strides[1],
-        ang_strides[2],
-        ang_strides[3],
-        ang_strides[4] * cell_height,
-        ang_strides[5] * cell_width,
-        ang_strides[4],
-        ang_strides[5],
-    )
-
-    cell_magnitudes = np.lib.stride_tricks.as_strided(
-        block_magnitudes,
-        shape=new_shape,
-        strides=new_mag_strides
-    )
-
-    cell_angles = np.lib.stride_tricks.as_strided(
-        block_angles,
-        shape=new_shape,
-        strides=new_ang_strides
-    )
-
-    return cell_magnitudes, cell_angles
+    return gx, gy
 
 
-def _divide_blocks(window_magnitude, window_angle, block_size, block_stride):
+def compute_magnitude_angle(gx, gy):
+    gx, gy = np.float64(gx), np.float64(gy)
 
-    w_rows, w_cols, w_height, w_width = window_magnitude.shape
+    magnitude = (gx ** 2 + gy ** 2) ** 0.5
+    angle = np.arctan2(gy, gx)  # returns in rads between -pi, +pi
+    angle = np.mod(angle, np.pi)
+    angle = np.rad2deg(angle)
 
-    b_height, b_width = block_size
-    bs_height, bs_width = block_stride
-
-    mag_strides = window_magnitude.strides
-    ang_strides = window_angle.strides
-
-    b_rows = (w_height - b_height) // bs_height + 1
-    b_cols = (w_width - b_width) // bs_width + 1
-
-    new_shape = (
-        w_rows, w_cols,
-        b_rows, b_cols,
-        b_height, b_width,
-    )
-
-    new_mag_strides = (
-        mag_strides[0],
-        mag_strides[1],
-        mag_strides[2] * bs_height,
-        mag_strides[3] * bs_width,
-        mag_strides[2],
-        mag_strides[3],
-    )
-
-    new_ang_strides = (
-        ang_strides[0],
-        ang_strides[1],
-        ang_strides[2] * bs_height,
-        ang_strides[3] * bs_width,
-        ang_strides[2],
-        ang_strides[3],
-    )
-
-    block_magnitudes = np.lib.stride_tricks.as_strided(
-        window_magnitude,
-        shape=new_shape,
-        strides=new_mag_strides
-    )
-
-    block_angles = np.lib.stride_tricks.as_strided(
-        window_angle,
-        shape=new_shape,
-        strides=new_ang_strides
-    )
-
-    return block_magnitudes, block_angles
+    return magnitude, angle
 
 
-def _divide_windows(magnitude, angle, window_size, window_stride):
-    window_magnitudes = extract_patches(
-        magnitude, patch_shape=window_size, extraction_step=window_stride)
-    window_angles = extract_patches(
-        angle, patch_shape=window_size, extraction_step=window_stride)
+def weighted_vote_into_cells(magnitude, angle):
+    idx, weight = np.divmod(angle, 20)
+    mask_lower = np.equal(idx[..., np.newaxis], np.arange(9))
+    mask_upper = np.equal(((idx + 1) % 9)[..., np.newaxis], np.arange(9))
 
-    return window_magnitudes, window_angles
+    histogram = mask_lower.astype(np.float64) * (magnitude * (weight / 20))[..., np.newaxis] \
+        + mask_upper.astype(np.float64) * (magnitude *
+                                           (1 - (weight / 20)))[..., np.newaxis]
 
-
-def _weighted_hist(magnitudes, angles):
-
-    idx = np.int64(angles // 20)
-
-    prop1 = angles - idx * 20.0
-    prop2 = 20.0 - prop1
-
-    lambda1 = prop2 / 20.0
-    lambda2 = prop1 / 20.0
-
-    idx1 = idx % 9
-    idx2 = (idx + 1) % 9
-
-    mag1 = lambda1 * magnitudes
-    mag2 = lambda2 * magnitudes
-
-    hists = []
-
-    for i in range(9):
-        hists.append((mag1 * (idx1 == i)).sum(axis=(-1, -2)) +
-                     (mag2 * (idx2 == i)).sum(axis=(-1, -2)))
-
-    hists = np.array(hists)
-
-    return np.moveaxis(hists, 0, -1)
+    return histogram.sum(axis=(2, 3))
 
 
-def weighted_hist_vectors(magnitudes, angles, block_stride, cell_size):
+def weighted_vote_into_spatial_and_orientation_cells(magnitude, angle, cell_shape):
+    magnitude = extract_patches(
+        magnitude, patch_shape=cell_shape, extraction_step=cell_shape)
+    angle = extract_patches(angle, patch_shape=cell_shape,
+                            extraction_step=cell_shape)
 
-    cell_magnitudes, cell_angles = _divide_cells(magnitudes, angles, cell_size)
+    cell_vectors = weighted_vote_into_cells(magnitude, angle)
 
-    hists = _weighted_hist(cell_magnitudes, cell_angles)
-
-    return hists
-
-
-def group_and_normalize(hist_vectors):
-    w_rows, w_cols, b_rows, b_cols, cell_rows, cell_cols, nbins = hist_vectors.shape
-
-    flattened = hist_vectors.reshape(
-        [w_rows * w_cols * b_rows * b_cols, cell_rows * cell_cols * nbins])
-
-    flattened = np.float64(flattened)
-    norms = np.sqrt(np.einsum("...i,...i", flattened, flattened))
-    epsilon = 10 ** -8
-    normalized = flattened / (norms + epsilon)[:, np.newaxis]
-
-    return normalized
+    return cell_vectors
 
 
-def hog_features(img, window_size=(36, 36), window_stride=(48, 48), block_size=(12, 12), block_stride=(6, 6), cell_size=(6, 6)):
+def contrast_normalize_over_overlapping_spatial_blocks(cell_vectors, num_cells_in_block, num_cells_in_block_stride):
+    patch_shape = (*num_cells_in_block, cell_vectors.shape[-1])
+    patch_stride = (*num_cells_in_block_stride, cell_vectors.shape[-1])
 
-    magnitude, angle = compute_gradients(img)
+    blocks = extract_patches(
+        cell_vectors, patch_shape=patch_shape, extraction_step=patch_stride).squeeze()
+    norms = ((blocks ** 2).sum(axis=-1)) ** 0.5
 
-    window_magnitudes, window_angles = _divide_windows(
-        magnitude, angle, window_size, window_stride)
-
-    block_magnitudes, block_angles = _divide_blocks(
-        window_magnitudes, window_angles, block_size, block_stride)
-
-    cell_magnitudes, cell_angles = _divide_cells(
-        block_magnitudes, block_angles, cell_size)
-
-    hist_vectors = _weighted_hist(cell_magnitudes, cell_angles)
-
-    normalized = group_and_normalize(hist_vectors)
-
-    return normalized.flatten()
+    # To be safe with 0 division
+    return blocks / (norms + 1e-9)[..., np.newaxis]
 
 
-def extractHogFromImage(img_path, block_size=(12, 12), block_stride=(6, 6), cell_size=(6, 6)):
-    img = cv.imread(img_path, 0)
-    img = np.float64(img) / 255.0
-    return hog_features(img, block_size=block_size, block_stride=block_stride, cell_size=cell_size)
+def extractHogFromImage(img, block_shape=(12, 12), block_stride=(6, 6), cell_shape=(6, 6)):
+    gx, gy = compute_gradients(img)
+
+    magnitude, angle = compute_magnitude_angle(gx, gy)
+
+    cell_vectors = weighted_vote_into_spatial_and_orientation_cells(
+        magnitude, angle, cell_shape)
+
+    num_cells_in_block = tuple(np.array(block_shape) // np.array(cell_shape))
+    num_cells_in_block_stride = tuple(
+        np.array(block_stride) // np.array(cell_shape))
+
+    block_vectors = contrast_normalize_over_overlapping_spatial_blocks(
+        cell_vectors, num_cells_in_block, num_cells_in_block_stride)
+
+    return block_vectors.flatten()
 
 
-def extractHogFromRandomCrop(img_path, win_size=(36, 36), win_stride=(48, 48), block_size=(12, 12), block_stride=(6, 6),
-                             cell_size=(6, 6)):
-    img = cv.imread(img_path, 0)
-    img = np.float64(img) / 255.0
+def extractHogFromRandomCrop(img, window_shape=(36, 36), window_stride=(48, 48), block_shape=(12, 12), block_stride=(6, 6), cell_shape=(6, 6)):
+    patches = extract_patches(img, patch_shape=window_shape, extraction_step=window_stride).reshape(-1, *window_shape)
 
-    hogs = hog_features(img, win_size, win_stride,
-                        block_size, block_stride, cell_size)
+    hogs = [extractHogFromImage(patch, block_shape, block_stride, cell_shape) for patch in patches]
+
     return np.array(hogs)

@@ -1,77 +1,73 @@
 import numpy as np
 import cv2 as cv
-from sklearn.feature_extraction.image import extract_patches
+
+from hog import extractHogFromImage
 
 
-def pyramid(image, scale=2, minSize=(36, 36)):
-    # yield the original image
-    yield image
+def compute_scales(img_shape, window_shape, downscale):
+    yield 1
+    img_shape = np.array(img_shape)
+    window_shape = np.array(window_shape)
 
-    # keep looping over the pyramid
-    while True:
-        # compute the new dimensions of the image and resize it
-        w = int(image.shape[1] / scale)
-        image = cv.resize(image, (0, 0), fx=1.0 / scale, fy=1.0 / scale)
-
-        # if the resized image does not meet the supplied minimum
-        # size, then stop constructing the pyramid
-        if image.shape[0] < minSize[1] or image.shape[1] < minSize[0]:
-            break
-
-        # yield the next image in the pyramid
-        yield image
+    n_scale = 1
+    img_shape = img_shape / downscale
+    while np.all(window_shape < img_shape):
+        yield downscale ** n_scale
+        img_shape /= downscale
+        n_scale += 1
 
 
-def sliding_window(img, window_size, window_stride):
-    n_rows, n_cols = img.shape
-    s_row, s_col = window_stride
-    w_row, w_col = window_size
+def sliding_window(image, scale, window_shape, window_stride):
+    
+    n_rows, n_cols = window_shape[0] * scale, window_shape[1] * scale
+    row_step, col_step = window_stride
+    
+    for row in range(0, image.shape[0] - n_rows, row_step):
+        for col in range(0, image.shape[1] - n_cols, col_step):
+            patch = image[row: row + n_rows, col: col + n_cols]
+            
+            if scale != 1:
+                patch = cv.resize(patch, window_shape)
 
-    def _check_window_shape(shape1, shape2):
-        return shape1[0] == shape2[0] and shape1[1] == shape2[1]
+            yield row, col, patch
 
-    for row in range(0, n_rows, s_row):
-        for col in range(0, n_cols, s_col):
-            window = img[row: row + w_row, col: col + w_col]
+def multi_scale_detector(img, classifier, downscale, window_shape, window_stride, block_shape, block_stride, cell_shape):
 
-            if _check_window_shape(window.shape, window_size):
-                yield (row, col, window)
+    hog = []
+    row_col_scale = []
 
+    for scale in compute_scales(img.shape, window_shape, downscale):
+        for row, col, window in sliding_window(img, scale, window_shape, window_stride):
+            img_hog = extractHogFromImage(window, block_shape, block_stride, cell_shape)
+            hog.append(img_hog)
+            row_col_scale.append((row, col, scale))
+    
+    hog = np.array(hog)
+    print(hog.shape)
+    row_col_scale = np.array(row_col_scale)
 
-def multi_scale_detector(img, classifier, downscale, win_size, win_stride, hog_features, opencv=False):
+    if hog.size > 0:
+        labels = classifier.predict(hog)
 
-    bounding_boxes = []
+        bounding_boxes = np.array(
+            [
+                (col, row, col + window_shape[1] * scale, row + window_shape[0] * scale)
+                for row, col, scale in row_col_scale[labels == 1]
+            ]
+        )
+    else:
+        return np.array([]), np.array([])
 
-    scale = 1
+    if hog[labels == 1].size > 0:
+        scores = classifier.decision_function(hog[labels == 1])
+    else:
+        scores = []
 
-    for resized in pyramid(img, scale=2, minSize=win_size):
-
-        for row, col, window_img in sliding_window(resized, win_size, win_stride):
-            if opencv:
-                hog_ = hog_features(window_img.astype(np.uint8)).reshape(900)
-            else:
-                hog_ = hog_features(window_img)
-
-            if classifier.predict([hog_]):
-                rect = np.array(
-                    [row, col, row + win_size[0], col + win_size[1]])
-                rect *= scale
-                bounding_boxes.append(rect)
-
-        scale *= 2
-
-    return np.array(bounding_boxes)
-
-
-def get_images(image_paths, opencv=False):
-    images = [cv.imread(img_path, 0) for img_path in image_paths]
-    if not opencv:
-        images = [np.float64(img) / 255.0 for img in images]
-    return images
+    return bounding_boxes, np.array(scores)
 
 
 # Malisiewicz et al.
-def non_max_suppression_fast(boxes, overlapThresh):
+def non_max_suppression_fast(boxes, scores, overlapThresh):
     # if there are no boxes, return an empty list
     if len(boxes) == 0:
         return []
@@ -93,7 +89,7 @@ def non_max_suppression_fast(boxes, overlapThresh):
     # compute the area of the bounding boxes and sort the bounding
     # boxes by the bottom-right y-coordinate of the bounding box
     area = (x2 - x1 + 1) * (y2 - y1 + 1)
-    idxs = np.argsort(y2)
+    idxs = np.argsort(scores)
 
     # keep looping while some indexes still remain in the indexes
     # list
@@ -128,18 +124,17 @@ def non_max_suppression_fast(boxes, overlapThresh):
     return boxes[pick].astype("int")
 
 
-def detect_faces(image_paths, classifier, hog_features, downscale=2, win_size=(36, 36), win_stride=(6, 6), opencv=False):
-
-    # Get images
-    images = get_images(image_paths, opencv=opencv)
+def detect_face(img, classifier, downscale=2, window_shape=(36, 36), window_stride=(6, 6), block_shape=(12, 12), block_stride=(6, 6), cell_shape=(6, 6)):
 
     # Detect faces
     # Bounding boxes
-    bounding_boxes_all = [multi_scale_detector(
-        img, classifier, downscale, win_size, win_stride, hog_features, opencv=opencv) for img in images]
-
+    bounding_boxes, scores = multi_scale_detector(img, classifier, downscale, window_shape, window_stride, block_shape, block_stride, cell_shape)
+    
     # apply non-maximum-suppression
-    detections_all = [non_max_suppression_fast(
-        bounding_boxes, 0) for bounding_boxes in bounding_boxes_all]
+    if bounding_boxes.size > 0 and scores.size > 0:
+        detections = non_max_suppression_fast(bounding_boxes, scores, 0)
+    else:
+        detections = np.array([])
+    
+    return detections, bounding_boxes
 
-    return detections_all, bounding_boxes_all
